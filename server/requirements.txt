@@ -13,5 +13,8 @@ edge-tts
 python-dotenv
 openai
 google-generativeai
+firebase-admin
+python-multipart
+Pillow
 pytest
 pytest-asyncio

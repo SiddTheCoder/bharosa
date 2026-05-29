@@ -29,5 +29,10 @@ class Settings(BaseSettings):
     # Voice (Sensor 2)
     ELEVENLABS_API_KEY: str = ""
 
+    # Firebase Admin (auth) — service-account JSON (inline string or path) + project id.
+    # Read from .env only. If empty, auth endpoints return 503 but the server still boots.
+    FIREBASE_CREDENTIALS_JSON: str = ""
+    FIREBASE_PROJECT_ID: str = ""
+
 
 settings = Settings()

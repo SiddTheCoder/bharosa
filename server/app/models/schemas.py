@@ -58,6 +58,37 @@ class TrustState(BaseModel):
     updated_at: datetime
 
 
+KycStatus = Literal["unverified", "pending", "verified", "rejected"]
+
+
+class User(BaseModel):
+    uid: str                                  # Firebase UID (unique index)
+    provider: Literal["google", "phone", "unknown"] = "unknown"
+    email: Optional[str] = None
+    phone: Optional[str] = None
+    name: Optional[str] = None
+    photo_url: Optional[str] = None
+    merchant_id: str                          # FK → merchants.id (the user's engine subject)
+    kyc_status: KycStatus = "unverified"
+    created_at: datetime
+    last_seen_at: datetime
+
+
+class KycSubmission(BaseModel):
+    id: str
+    uid: str                                  # owner
+    doc_type: Literal["citizenship", "nid", "pan", "passport", "license"]
+    claimed: dict = Field(default_factory=dict)      # { name, dob, id_number } the user typed
+    extracted: dict = Field(default_factory=dict)    # OCR fields the model read off the document
+    checks: dict = Field(default_factory=dict)       # per-stage results
+    confidence: float = 0.0                          # 0..1 overall
+    decision: Literal["pending", "verified", "rejected"] = "pending"
+    reasons: list[str] = Field(default_factory=list)
+    doc_uris: list[str] = Field(default_factory=list)
+    selfie_uri: Optional[str] = None
+    created_at: datetime
+
+
 # ───────────────────────────── Shared currency ─────────────────────────────
 
 @dataclass

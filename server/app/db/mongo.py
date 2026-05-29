@@ -2,7 +2,11 @@
 import logging
 from typing import Optional
 
-from motor.motor_asyncio import AsyncIOMotorClient, AsyncIOMotorDatabase
+from motor.motor_asyncio import (
+    AsyncIOMotorClient,
+    AsyncIOMotorDatabase,
+    AsyncIOMotorGridFSBucket,
+)
 
 from app.config import settings
 
@@ -39,3 +43,8 @@ def get_db() -> AsyncIOMotorDatabase:
     if _db is None:
         raise RuntimeError("MongoDB is not connected. Call connect_to_mongo() first.")
     return _db
+
+
+def get_gridfs_bucket(name: str = "kyc") -> AsyncIOMotorGridFSBucket:
+    """GridFS bucket for binary blobs (KYC documents/selfies). Private to the DB."""
+    return AsyncIOMotorGridFSBucket(get_db(), bucket_name=name)
