@@ -1,0 +1,17 @@
+fastapi
+uvicorn[standard]
+motor
+pydantic>=2
+pydantic-settings
+python-socketio
+networkx
+python-louvain
+numpy
+scipy
+httpx
+edge-tts
+python-dotenv
+openai
+google-generativeai
+pytest
+pytest-asyncio
