@@ -1,4 +1,5 @@
 import { configureStore } from "@reduxjs/toolkit";
+import adminReducer from "./slices/adminSlice";
 import authReducer from "./slices/authSlice";
 import billsReducer from "./slices/billsSlice";
 import kycReducer, { setKycStatus, setKycStep, updateKycForm, type KycState } from "./slices/kycSlice";
@@ -22,6 +23,7 @@ function readJson<T>(key: string): T | undefined {
 export function makeStore() {
   const store = configureStore({
     reducer: {
+      admin: adminReducer,
       auth: authReducer,
       bills: billsReducer,
       kyc: kycReducer,

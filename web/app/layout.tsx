@@ -4,6 +4,7 @@ import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { ThemeProvider } from "@/components/theme-provider";
 import { AuthProvider } from "@/lib/auth";
+import { AdminProvider } from "@/lib/admin";
 import { StoreProvider } from "@/store/StoreProvider";
 import "./globals.css";
 
@@ -22,7 +23,9 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
         <ThemeProvider>
           <TooltipProvider>
             <StoreProvider>
-              <AuthProvider>{children}</AuthProvider>
+              <AuthProvider>
+                <AdminProvider>{children}</AdminProvider>
+              </AuthProvider>
               <Toaster richColors position="top-right" />
             </StoreProvider>
           </TooltipProvider>
