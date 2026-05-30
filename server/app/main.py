@@ -6,7 +6,7 @@ import socketio
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.api.routes import auth, events, interview, kyc, me, passport
+from app.api.routes import admin, auth, events, interview, kyc, me, passport
 from app.auth.firebase import init_firebase
 from app.db.mongo import connect_to_mongo, close_mongo
 from app.live.socket import sio
@@ -51,6 +51,7 @@ app.include_router(interview.router)
 app.include_router(auth.router)
 app.include_router(kyc.router)
 app.include_router(me.router)
+app.include_router(admin.router)
 
 # Combined ASGI app: Socket.IO live channel wrapping the FastAPI app.
 asgi_app = socketio.ASGIApp(sio, other_asgi_app=app, socketio_path="socket.io")

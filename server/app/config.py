@@ -34,5 +34,12 @@ class Settings(BaseSettings):
     FIREBASE_CREDENTIALS_JSON: str = ""
     FIREBASE_PROJECT_ID: str = ""
 
+    # Admin panel (web) — a single hard-coded operator. Credentials live here (not in
+    # Firebase): the web admin signs in with these and receives a signed admin JWT.
+    ADMIN_EMAIL: str = "admin@gmail.com"
+    ADMIN_PASSWORD: str = "admin"
+    ADMIN_JWT_SECRET: str = "change-me-bharosa-admin"   # HS256 signing secret
+    ADMIN_TOKEN_TTL_HOURS: int = 24
+
 
 settings = Settings()
