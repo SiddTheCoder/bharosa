@@ -33,11 +33,19 @@ class Vouch(BaseModel):
 class BehaviorEvent(BaseModel):
     id: str
     merchant_id: str
-    kind: Literal["electricity", "water", "internet", "airtime", "qr_revenue"]
+    kind: Literal[
+        "electricity", "water", "internet", "airtime",
+        "qr_revenue",        # incoming customer payment
+        "supplier_payment",  # outgoing payment to a supplier
+    ]
     date: datetime
     amount: int                              # NPR
     on_time: Optional[bool] = None           # for bills
     due_date: Optional[datetime] = None      # for bills
+    # Commerce-relationship fields (qr_revenue / supplier_payment):
+    counterparty: Optional[str] = None       # stable id/token for the other party
+    counterparty_name: Optional[str] = None  # display name, if known
+    direction: Optional[Literal["in", "out"]] = None  # in = customer paid; out = paid supplier
 
 
 class PsychometricAnswer(BaseModel):

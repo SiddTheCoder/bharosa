@@ -1,0 +1,8 @@
+⨯ Another next dev server is already running.
+
+- Local:        http://localhost:3000
+- PID:          11712
+- Dir:          D:\siddhant-files\projects\Hacakthon\JunctionXHackathon\web
+- Log:          .next\dev\logs\next-development.log
+
+Run taskkill /PID 11712 /F to stop it.

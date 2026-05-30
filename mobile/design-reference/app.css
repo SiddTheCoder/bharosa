@@ -1,0 +1,107 @@
+/* ============================================================
+   Trust Layer — Design System
+   Warm, trustworthy fintech for unbanked micro-merchants
+   ============================================================ */
+
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Noto+Sans+Devanagari:wght@400;500;600;700&display=swap');
+
+:root {
+  /* ink + neutrals */
+  --ink:      #15211C;
+  --ink-2:    #46554E;
+  --muted:    #7E8C84;
+  --faint:    #A7B2AB;
+  --line:     #E7EBE6;
+  --hair:     #EFF2EE;
+  --bg:       #F1F3EE;
+  --card:     #FFFFFF;
+
+  /* trust green */
+  --g-800: #094E38;
+  --g-700: #0B6E4C;
+  --g-600: #0E8A5F;   /* primary */
+  --g-500: #16A06D;
+  --g-400: #3CB98A;
+  --g-100: #DCF1E7;
+  --g-50:  #ECF8F2;
+
+  /* states */
+  --amber-700: #9A6510;
+  --amber-600: #B5780F;
+  --amber-100: #FBEAC9;
+  --amber-50:  #FBF3E1;
+  --red-600:   #C0413A;
+  --red-100:   #F7D9D6;
+  --red-50:    #FBEBE9;
+  --blue-600:  #2D6CCB;
+  --blue-50:   #E9F1FB;
+
+  /* radii + shadow */
+  --r-sm: 10px;
+  --r-md: 16px;
+  --r-lg: 22px;
+  --r-xl: 28px;
+  --sh-1: 0 1px 2px rgba(16,40,30,.05), 0 1px 1px rgba(16,40,30,.04);
+  --sh-2: 0 6px 18px -8px rgba(16,40,30,.18), 0 2px 6px -2px rgba(16,40,30,.08);
+  --sh-3: 0 18px 50px -18px rgba(16,40,30,.32);
+
+  --ff: 'Plus Jakarta Sans', 'Noto Sans Devanagari', system-ui, sans-serif;
+}
+
+* { box-sizing: border-box; }
+html, body { margin: 0; padding: 0; }
+body { font-family: var(--ff); color: var(--ink); -webkit-font-smoothing: antialiased; }
+
+.np { font-family: 'Noto Sans Devanagari', var(--ff); }
+
+/* utilities */
+.muted { color: var(--muted); }
+.ink2  { color: var(--ink-2); }
+.tnum  { font-variant-numeric: tabular-nums; font-feature-settings: "tnum"; }
+.row   { display: flex; align-items: center; }
+.between { display: flex; align-items: center; justify-content: space-between; }
+
+/* ---- pills / badges ---- */
+.pill {
+  display: inline-flex; align-items: center; gap: 6px;
+  height: 26px; padding: 0 11px; border-radius: 999px;
+  font-size: 12.5px; font-weight: 600; letter-spacing: .1px;
+  white-space: nowrap;
+}
+.pill .dot { width: 7px; height: 7px; border-radius: 50%; }
+.pill-green { background: var(--g-100); color: var(--g-700); }
+.pill-green .dot { background: var(--g-500); }
+.pill-amber { background: var(--amber-100); color: var(--amber-700); }
+.pill-amber .dot { background: var(--amber-600); }
+.pill-red   { background: var(--red-100); color: var(--red-600); }
+.pill-red .dot { background: var(--red-600); }
+.pill-ghost { background: var(--hair); color: var(--ink-2); }
+
+/* ---- buttons ---- */
+.btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 9px;
+  border: 0; cursor: pointer; font-family: var(--ff);
+  font-weight: 700; font-size: 15.5px; letter-spacing: .1px;
+  height: 52px; padding: 0 22px; border-radius: 14px;
+  transition: transform .12s ease, box-shadow .2s ease, background .2s ease;
+}
+.btn:active { transform: translateY(1px) scale(.995); }
+.btn-primary { background: var(--g-600); color: #fff; box-shadow: 0 8px 18px -8px rgba(14,138,95,.6); }
+.btn-primary:hover { background: var(--g-700); }
+.btn-ghost { background: var(--g-50); color: var(--g-700); }
+.btn-ghost:hover { background: var(--g-100); }
+.btn-line { background: #fff; color: var(--ink); box-shadow: inset 0 0 0 1.5px var(--line); }
+.btn-line:hover { box-shadow: inset 0 0 0 1.5px var(--faint); }
+.btn-sm { height: 40px; font-size: 14px; padding: 0 16px; border-radius: 11px; }
+
+/* ---- card ---- */
+.card {
+  background: var(--card); border-radius: var(--r-lg);
+  box-shadow: var(--sh-1); border: 1px solid var(--hair);
+}
+
+/* ---- score ring (svg) ---- */
+.ring-wrap { position: relative; display: inline-grid; place-items: center; }
+.ring-wrap .ring-center {
+  position: absolute; inset: 0; display: grid; place-items: center; text-align: center;
+}

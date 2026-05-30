@@ -17,6 +17,7 @@ import uuid
 from datetime import datetime, timedelta
 
 from app.db.mongo import connect_to_mongo, close_mongo, get_db
+from app.engines.fusion_engine import compute_trust
 
 logger = logging.getLogger(__name__)
 random.seed(42)
@@ -87,6 +88,22 @@ def qr(merchant_id, months_ago, amount):
     }
 
 
+def payment(merchant_id, days_ago, amount, counterparty, name, direction):
+    """A transaction-level payment carrying a counterparty (customer or supplier)."""
+    return {
+        "id": _mid("p"),
+        "merchant_id": merchant_id,
+        "kind": "qr_revenue" if direction == "in" else "supplier_payment",
+        "date": NOW - timedelta(days=days_ago),
+        "amount": amount,
+        "on_time": None,
+        "due_date": None,
+        "counterparty": counterparty,
+        "counterparty_name": name,
+        "direction": direction,
+    }
+
+
 def build_dataset():
     merchants: list[dict] = []
     vouches: list[dict] = []
@@ -152,6 +169,22 @@ def build_dataset():
     # ensure those two normals are anchor-traceable
     vouches.append(vouch(anchor_ids[2], normals[0]["id"], "vouch", 220))
     vouches.append(vouch(anchor_ids[3], normals[1]["id"], "vouch", 210))
+    # commerce relationships: 4 loyal customers paying ~monthly for 8 months …
+    loyal = [("cust_ram", "Ram (regular)"), ("cust_sunita", "Sunita (regular)"),
+             ("cust_office", "Ward Office canteen"), ("cust_hostel", "Bagmati Hostel")]
+    for cp, nm in loyal:
+        for mo in range(1, 9):
+            events.append(payment(good["id"], 30 * mo + random.randint(-3, 3),
+                                   random.randint(1500, 4000), cp, nm, "in"))
+    # … plus ~15 one-off walk-in customers (no repeat → not counted as loyal)
+    for i in range(15):
+        events.append(payment(good["id"], random.randint(1, 240),
+                               random.randint(200, 1200), f"walkin_{i}", "Walk-in", "in"))
+    # … and 2 suppliers restocked ~monthly for 10 months (operating supply chain)
+    for cp, nm in [("sup_dairy", "Himal Dairy (wholesale)"), ("sup_grain", "Annapurna Grains")]:
+        for mo in range(1, 11):
+            events.append(payment(good["id"], 30 * mo + random.randint(-2, 2),
+                                   random.randint(8000, 14000), cp, nm, "out"))
 
     # ── DEMO 3: seasonal farmer (harvest cycle, 2 years) ──
     farmer = merchant("seasonal_farmer", "Hari the Farmer", "farmer", created_days_ago=800)
@@ -203,6 +236,14 @@ async def seed():
     await db.merchants.insert_many(merchants)
     await db.vouches.insert_many(vouches)
     await db.behavior_events.insert_many(events)
+
+    # Precompute each merchant's trust posterior + fraud flag so the admin panel
+    # shows scores on first load (compute_trust persists alpha/beta to trust_states).
+    for m in merchants:
+        res = await compute_trust(m["id"])
+        await db.trust_states.update_one(
+            {"merchant_id": m["id"]}, {"$set": {"fraud_risk": res["fraud_risk"]}}
+        )
 
     logger.info(
         "Seeded: %d merchants (%d anchors), %d vouches, %d behavior events",

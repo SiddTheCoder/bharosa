@@ -39,12 +39,22 @@ OCR_PROMPT = (
     "return STRICT JSON only (no prose, no markdown):\n"
     '{"is_identity_document": <bool>, "doc_type": '
     '"citizenship|nid|pan|passport|license|unknown", "name": "<full name or empty>", '
-    '"dob": "<date of birth as written, or empty>", "id_number": "<id/document number or empty>", '
+    '"name_romanized": "<full name transliterated to Latin/English letters, or empty>", '
+    '"dob": "<date of birth exactly as written on the document, or empty>", '
+    '"dob_gregorian": "<date of birth normalized to Gregorian ISO YYYY-MM-DD, or empty>", '
+    '"id_number": "<id/document number or empty>", '
     '"issuer": "<issuing authority or empty>", "has_photo": <bool>, '
     '"quality": {"blurry": <bool>, "glare": <bool>, "screenshot_or_screen": <bool>, '
     '"tamper_signs": <bool>}}\n'
+    "Read `name` and `dob` exactly as printed (keep the original script, e.g. Devanagari). "
+    "For `name_romanized`, transliterate that same name into Latin letters. "
+    "For `dob_gregorian`, convert the printed date to the Gregorian (AD) calendar in "
+    "YYYY-MM-DD form. IMPORTANT: many Nepali documents print the date in the Bikram "
+    "Sambat (BS) calendar, which runs ~56-57 years ahead of AD (e.g. BS 2064-04-13 = "
+    "AD 2007-07-29). If the document uses BS, convert it to AD; if it is already "
+    "Gregorian, keep it as-is.\n"
     "screenshot_or_screen = true if this looks like a photo of a screen / a screen "
-    "recapture rather than a photo of a physical document. Read fields exactly as printed."
+    "recapture rather than a photo of a physical document."
 )
 
 FACE_PROMPT = (
@@ -128,7 +138,9 @@ async def verify_submission(
     extracted = {
         "doc_type": ocr.get("doc_type", "unknown"),
         "name": ocr.get("name", ""),
+        "name_romanized": ocr.get("name_romanized", ""),
         "dob": ocr.get("dob", ""),
+        "dob_gregorian": ocr.get("dob_gregorian", ""),
         "id_number": ocr.get("id_number", ""),
         "issuer": ocr.get("issuer", ""),
     }
@@ -160,7 +172,13 @@ async def verify_submission(
     name_sources = [claimed.get("name", "")]
     if firebase_name:
         name_sources.append(firebase_name)
-    name_match = max((_name_similarity(extracted["name"], n) for n in name_sources), default=0.0)
+    # Compare the claimed name against both the raw (original-script) and the
+    # romanized document name, so a Devanagari ID still matches a Latin-typed name.
+    doc_names = [n for n in (extracted["name"], extracted["name_romanized"]) if n]
+    name_match = max(
+        (_name_similarity(dn, n) for dn in doc_names for n in name_sources),
+        default=0.0,
+    )
     checks["name_match"] = round(name_match, 3)
     if name_match < 0.35:
         reasons.append("Name on the document does not match the name provided.")
@@ -169,7 +187,11 @@ async def verify_submission(
         reasons.append("Name on the document only partially matches the name provided.")
         soft_flag = True
 
-    dob_ok = _dob_match(claimed.get("dob", ""), extracted["dob"])
+    # Match against the date as written AND the Gregorian-normalized date, so a
+    # Bikram Sambat (Nepali calendar) DOB matches a claimed AD date.
+    dob_ok = _dob_match(claimed.get("dob", ""), extracted["dob"]) or _dob_match(
+        claimed.get("dob", ""), extracted["dob_gregorian"]
+    )
     checks["dob_match"] = dob_ok
     if claimed.get("dob") and not dob_ok:
         reasons.append("Date of birth does not match the document.")

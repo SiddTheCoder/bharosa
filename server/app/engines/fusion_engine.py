@@ -14,11 +14,14 @@ from scipy.stats import beta as beta_dist
 from app.db.mongo import get_db
 from app.engines.behavior_engine import behavioral_evidence
 from app.engines.graph_engine import social_evidence
+from app.engines.relationships_engine import merchant_relationships, relationship_evidence
+from app.engines.seasonality import merchant_season, repayment_schedule, schedule_note
 from app.models.schemas import Evidence
 
 PRIOR_ALPHA = 2.0
 PRIOR_BETA = 3.0
 LOAN_CEILING_NPR = 200_000
+SCORE_MAX = 1000           # trust score scale: 0 (no trust) .. 1000 (fully trusted)
 
 
 def fold_evidence(
@@ -37,7 +40,7 @@ def posterior_stats(alpha: float, beta: float) -> dict:
     mean = alpha / (alpha + beta)
     p5 = float(beta_dist.ppf(0.05, alpha, beta))
     p95 = float(beta_dist.ppf(0.95, alpha, beta))
-    score = round(300 + mean * 550)
+    score = round(mean * SCORE_MAX)              # 0..1000
     confidence = round((1 - (p95 - p5)) * 100)
     recommended_loan = int(LOAN_CEILING_NPR * p5)
     return {
@@ -66,22 +69,21 @@ async def _psychometric_evidence(merchant_id: str) -> list[Evidence]:
     return evidence
 
 
-def _schedule_note(evidence: list[Evidence]) -> str:
-    if any("seasonal" in e.label.lower() for e in evidence):
-        return "post-harvest weighted"
-    return "standard monthly"
-
-
 async def _gather_evidence(merchant_id: str) -> tuple[list[Evidence], dict]:
     behavior = await behavioral_evidence(merchant_id)
     social, fraud_report = await social_evidence(merchant_id)
     psycho = await _psychometric_evidence(merchant_id)
-    return behavior + social + psycho, fraud_report
+    relationships = await relationship_evidence(merchant_id)
+    return behavior + social + psycho + relationships, fraud_report
 
 
-def _trust_result(merchant_id: str, alpha: float, beta: float,
-                  evidence: list[Evidence], fraud_report: dict) -> dict:
+async def _trust_result(merchant_id: str, alpha: float, beta: float,
+                        evidence: list[Evidence], fraud_report: dict) -> dict:
     stats = posterior_stats(alpha, beta)
+    season = await merchant_season(merchant_id)
+    note = schedule_note(season)
+    schedule = repayment_schedule(season["cashflow"], stats["recommended_loan"])
+    relationships = await merchant_relationships(merchant_id)
     return {
         "merchant_id": merchant_id,
         "score": stats["score"],
@@ -91,9 +93,28 @@ def _trust_result(merchant_id: str, alpha: float, beta: float,
         "p95": round(stats["p95"], 4),
         "recommended_loan": stats["recommended_loan"],
         "fraud_risk": "HIGH" if fraud_report.get("in_ring") else "LOW",
-        "schedule_note": _schedule_note(evidence),
+        "schedule_note": note,
+        # Per-month cash-flow profile (boom/neutral/lean) + harvest-weighted plan,
+        # ready for the dashboard's per-month bar graph and the lender view.
+        "cashflow": season["cashflow"],
+        "season": {
+            "seasonal": season["seasonal"],
+            "predictability": round(season["predictability"], 2),
+            "stability": round(season["stability"], 2),
+            "peak_months": season["peak_months"],
+            "lean_months": season["lean_months"],
+            "period_months": season["period_months"],
+        },
+        "loan": {
+            "amount_npr": stats["recommended_loan"],
+            "schedule_note": note,
+            "schedule": schedule,
+        },
+        # Commerce relationships: repeat customers, supplier ties, concentration.
+        "relationships": relationships,
         "evidence": [
-            {"label": e.label, "value": round(e.value, 3), "source": e.source}
+            {"label": e.label, "value": round(e.value, 3), "source": e.source,
+             "action_type": e.action_type}
             for e in evidence
         ],
     }
@@ -120,7 +141,7 @@ async def compute_trust(merchant_id: str) -> dict:
     evidence, fraud_report = await _gather_evidence(merchant_id)
     alpha, beta = fold_evidence(evidence)
     await _persist(merchant_id, alpha, beta, evidence)
-    return _trust_result(merchant_id, alpha, beta, evidence, fraud_report)
+    return await _trust_result(merchant_id, alpha, beta, evidence, fraud_report)
 
 
 async def apply_event(merchant_id: str, evidence: list[Evidence]) -> dict:
@@ -148,4 +169,4 @@ async def apply_event(merchant_id: str, evidence: list[Evidence]) -> dict:
 
     all_evidence = [Evidence.from_dict(d) for d in new_log]
     _, fraud_report = await social_evidence(merchant_id)
-    return _trust_result(merchant_id, alpha, beta, all_evidence, fraud_report)
+    return await _trust_result(merchant_id, alpha, beta, all_evidence, fraud_report)

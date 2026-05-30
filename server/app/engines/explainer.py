@@ -45,9 +45,11 @@ def actions_for_delta(delta_alpha: float) -> list[str]:
         return []
     n_bills = math.ceil(delta_alpha / K_BILL)
     n_vouches = math.ceil(delta_alpha / K_VOUCH)
+    bill_word = "bill" if n_bills == 1 else "bills"
+    vouch_word = "trusted business" if n_vouches == 1 else "trusted businesses"
     return [
-        f"≈ {n_bills} more on-time bill(s)",
-        f"OR {n_vouches} vouch(es) from a trusted merchant",
+        f"Pay {n_bills} more {bill_word} on time (like electricity or water)",
+        f"Or get {n_vouches} more {vouch_word} to vouch for you",
     ]
 
 
@@ -56,7 +58,7 @@ async def explanation_for(result: dict, alpha: float, beta: float) -> dict:
     mean = alpha / (alpha + beta)
     target = next_tier_target(mean)
     if target is None:
-        next_steps = ["You're at the top tier — keep up the on-time record."]
+        next_steps = ["You're at the top level — just keep paying on time and staying active."]
     else:
         _, threshold = target
         next_steps = actions_for_delta(evidence_delta_to(threshold, alpha, beta))

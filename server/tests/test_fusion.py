@@ -10,7 +10,7 @@ from app.models.schemas import Evidence
 def test_prior_gives_positive_small_loan():
     a, b = fold_evidence([])
     stats = posterior_stats(a, b)
-    assert 300 <= stats["score"] <= 850
+    assert 0 <= stats["score"] <= 1000
     assert stats["recommended_loan"] > 0
 
 

@@ -9,6 +9,7 @@ from __future__ import annotations
 import numpy as np
 
 from app.db.mongo import get_db
+from app.engines.seasonality import analyze, detect_seasonality  # noqa: F401 (re-exported)
 from app.models.schemas import Evidence
 
 BILL_KINDS = ("electricity", "water", "internet")
@@ -42,56 +43,6 @@ def _regularity(dates_sorted: list) -> float:
         return 0.0
     norm_std = float(np.std(gaps)) / mean
     return _clamp01(1.0 - norm_std)
-
-
-def detect_seasonality(monthly_revenue: list[float]) -> dict:
-    """Detect a yearly (period=12) cycle via autocorrelation.
-
-    Returns {"seasonal": bool, "period_months": int|None, "peak_months": list[int]}
-    where peak_months are 1-indexed positions within the 12-month cycle.
-    """
-    period = 12
-    out = {"seasonal": False, "period_months": None, "peak_months": []}
-    n = len(monthly_revenue)
-    if n < 2 * period:
-        return out
-
-    x = np.asarray(monthly_revenue, dtype=float)
-    x = x - x.mean()
-    denom = float(np.sum(x * x))
-    if denom <= 0:
-        return out
-    autocorr = float(np.sum(x[period:] * x[:-period]) / denom)
-
-    if autocorr < 0.3:
-        return out
-
-    # Per-position seasonal profile across whole cycles.
-    full = (n // period) * period
-    cycles = np.asarray(monthly_revenue[:full], dtype=float).reshape(-1, period)
-    profile = cycles.mean(axis=0)
-    threshold = profile.mean() + 0.5 * profile.std()
-    peaks = [i + 1 for i, v in enumerate(profile) if v >= threshold]
-
-    out.update(seasonal=True, period_months=period, peak_months=peaks)
-    return out
-
-
-def _deseasonalize(monthly_revenue: list[float], period: int = 12) -> list[float]:
-    """Divide each value by its position's seasonal index (mean-normalized)."""
-    arr = np.asarray(monthly_revenue, dtype=float)
-    overall = arr.mean()
-    if overall <= 0:
-        return monthly_revenue
-    idx = np.array([overall] * period)
-    full = (len(arr) // period) * period
-    if full >= period:
-        cycles = arr[:full].reshape(-1, period)
-        idx = cycles.mean(axis=0)
-        idx[idx <= 0] = overall
-    factors = idx / overall
-    out = [v / factors[i % period] for i, v in enumerate(arr)]
-    return out
 
 
 async def behavioral_evidence(merchant_id: str) -> list[Evidence]:
@@ -140,22 +91,32 @@ async def behavioral_evidence(merchant_id: str) -> list[Evidence]:
             action_type="airtime",
         ))
 
-    # ── QR revenue stability (seasonality-aware) ──
+    # ── QR revenue (seasonality-aware) ──
     qr = sorted((e for e in events if e["kind"] == "qr_revenue"), key=lambda e: e["date"])
     if len(qr) >= 3:
         series = [float(e["amount"]) for e in qr]
-        season = detect_seasonality(series)
+        months = [e["date"].month for e in qr]
+        season = analyze(series, months)
         if season["seasonal"]:
-            stability = _clamp01(1.0 - _coeff_of_variation(_deseasonalize(series)))
-            label = "seasonal (harvest) income — predictable"
+            # A predictable harvest cycle is a *positive* signal, not noise. We
+            # reward both how steady this year is vs a typical one (stability) and
+            # how confidently the pattern recurs (predictability), and never let a
+            # recognized season push the value negative — lean months are expected.
+            signal = 0.5 * season["stability"] + 0.5 * season["predictability"]
+            value = _clamp01(2 * signal - 1)
+            label = "predictable seasonal (harvest) income"
+            # Thin history → lower predictability → less weight, never a penalty.
+            reliability = _clamp01(len(qr) / 12) * (0.6 + 0.4 * season["predictability"])
         else:
             stability = _clamp01(1.0 - _coeff_of_variation(series))
+            value = 2 * stability - 1
             label = "stable QR revenue"
+            reliability = _clamp01(len(qr) / 12)
         evidence.append(Evidence(
             source="behavior",
             label=label,
-            value=2 * stability - 1,
-            reliability=_clamp01(len(qr) / 12),
+            value=value,
+            reliability=reliability,
             k=3.0,
             action_type="qr",
         ))

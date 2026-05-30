@@ -1,0 +1,716 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Trust Layer — Merchant App</title>
+<link rel="stylesheet" href="app.css" />
+<style>
+  body { background: #E9ECE6; }
+  .stage {
+    min-height: 100vh; width: 100%;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    gap: 18px; padding: 28px 16px;
+    background:
+      radial-gradient(120% 90% at 50% -10%, #F3F6F0 0%, #E5E9E2 55%, #DCE1DA 100%);
+  }
+  .phone-shell { transform-origin: top center; }
+  .phone {
+    width: 392px; height: 846px; position: relative;
+    background: #0b0f0d; border-radius: 52px; padding: 7px;
+    box-shadow: var(--sh-3), 0 0 0 2px rgba(255,255,255,.04) inset;
+  }
+  .screenwrap {
+    position: absolute; inset: 7px; border-radius: 46px; overflow: hidden;
+    background: var(--bg); display: flex; flex-direction: column;
+  }
+  /* notch */
+  .notch {
+    position: absolute; top: 7px; left: 50%; transform: translateX(-50%);
+    width: 128px; height: 30px; background: #0b0f0d; border-radius: 0 0 18px 18px; z-index: 40;
+  }
+  .statusbar {
+    height: 52px; flex: 0 0 52px; display: flex; align-items: flex-end; justify-content: space-between;
+    padding: 0 26px 6px; font-size: 14px; font-weight: 700; color: var(--ink); z-index: 30;
+    background: var(--bg);
+  }
+  .statusbar .sb-r { display: flex; align-items: center; gap: 7px; }
+  .viewport { position: relative; flex: 1; overflow: hidden; }
+  .screen {
+    position: absolute; inset: 0; overflow-y: auto; overflow-x: hidden;
+    padding: 6px 18px 108px; opacity: 0; transform: translateY(8px);
+    pointer-events: none; transition: opacity .28s ease, transform .28s ease;
+    scrollbar-width: none;
+  }
+  .screen::-webkit-scrollbar { display: none; }
+  .screen.active { opacity: 1; transform: none; pointer-events: auto; }
+
+  /* tab bar */
+  .tabbar {
+    position: absolute; bottom: 0; left: 0; right: 0; height: 86px; z-index: 35;
+    display: grid; grid-template-columns: repeat(3, 1fr);
+    background: rgba(255,255,255,.86); backdrop-filter: blur(14px);
+    border-top: 1px solid var(--hair); padding-bottom: 14px;
+  }
+  .tab {
+    border: 0; background: none; cursor: pointer; font-family: var(--ff);
+    display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px;
+    color: var(--faint); font-size: 11.5px; font-weight: 700; padding-top: 12px;
+    transition: color .15s ease;
+  }
+  .tab svg { width: 23px; height: 23px; }
+  .tab.on { color: var(--g-700); }
+
+  /* ---- shared content bits ---- */
+  .greet { display: flex; align-items: center; gap: 11px; padding: 8px 2px 16px; }
+  .avatar {
+    width: 42px; height: 42px; border-radius: 13px; flex: 0 0 42px;
+    background: linear-gradient(150deg, var(--g-500), var(--g-700));
+    color: #fff; display: grid; place-items: center; font-weight: 800; font-size: 15px;
+    box-shadow: 0 6px 14px -6px rgba(11,110,76,.6);
+  }
+  .greet h1 { font-size: 17px; margin: 0; letter-spacing: -.2px; }
+  .greet p { margin: 1px 0 0; font-size: 12.5px; color: var(--muted); font-weight: 500; }
+  .iconbtn {
+    width: 40px; height: 40px; border-radius: 12px; border: 1px solid var(--hair);
+    background: #fff; display: grid; place-items: center; cursor: pointer; color: var(--ink-2);
+    box-shadow: var(--sh-1);
+  }
+  .iconbtn svg { width: 19px; height: 19px; }
+
+  .scr-title { font-size: 23px; font-weight: 800; letter-spacing: -.5px; margin: 10px 2px 2px; }
+  .scr-sub   { font-size: 13.5px; color: var(--muted); margin: 0 2px 16px; font-weight: 500; }
+
+  /* hero score */
+  .hero { padding: 18px; margin-bottom: 14px; }
+  .hero-top { display: flex; gap: 16px; align-items: center; }
+  .ring { width: 116px; height: 116px; transform: rotate(-90deg); flex: 0 0 116px; }
+  .ring .track { fill: none; stroke: var(--hair); stroke-width: 10; }
+  .ring .prog  { fill: none; stroke-width: 10; stroke-linecap: round;
+                 transition: stroke-dashoffset 1.1s cubic-bezier(.2,.7,.2,1); }
+  .ring-score { font-size: 31px; font-weight: 800; letter-spacing: -1px; line-height: 1; }
+  .ring-of { font-size: 10.5px; color: var(--muted); font-weight: 600; margin-top: 3px; letter-spacing: .3px; }
+  .hero-meta { flex: 1; min-width: 0; }
+  .hero-pills { display: flex; gap: 7px; flex-wrap: wrap; margin-bottom: 9px; }
+  .hero-label { font-size: 12px; color: var(--muted); font-weight: 600; letter-spacing: .2px; }
+  .hero-num { font-size: 27px; font-weight: 800; letter-spacing: -.6px; line-height: 1.05; margin: 1px 0 6px; }
+  .delta { color: var(--g-600); font-weight: 700; font-size: 13px; display: inline-flex; align-items: center; gap: 4px; }
+  .conf { margin-top: 14px; }
+  .conf .between { font-size: 12px; font-weight: 600; color: var(--ink-2); margin-bottom: 6px; }
+  .meter { height: 7px; border-radius: 99px; background: var(--hair); overflow: hidden; }
+  .meter > i { display: block; height: 100%; border-radius: 99px; background: linear-gradient(90deg, var(--g-500), var(--g-600)); }
+  .hero-note {
+    margin-top: 14px; font-size: 12.8px; color: var(--ink-2); line-height: 1.5;
+    background: var(--g-50); border-radius: 12px; padding: 11px 13px; font-weight: 500;
+  }
+
+  /* borrow */
+  .borrow { padding: 18px; margin-bottom: 14px;
+    background: linear-gradient(160deg, #0B6E4C 0%, #0E8A5F 100%); color: #fff; border: 0; }
+  .borrow .blab { font-size: 12.5px; font-weight: 600; opacity: .85; letter-spacing: .2px; }
+  .borrow .bnum { font-size: 38px; font-weight: 800; letter-spacing: -1.2px; margin: 3px 0 2px; }
+  .borrow .bsub { font-size: 12.5px; opacity: .82; font-weight: 500; }
+  .borrow .btn { width: 100%; margin-top: 16px; background: #fff; color: var(--g-700); box-shadow: none; }
+  .borrow .btn:hover { background: #F2FAF6; }
+
+  /* generic section card */
+  .sect { padding: 16px 16px 6px; margin-bottom: 14px; }
+  .sect-h { display: flex; align-items: center; gap: 9px; margin-bottom: 4px; }
+  .sect-h .ico { width: 30px; height: 30px; border-radius: 9px; background: var(--g-50); color: var(--g-600);
+                 display: grid; place-items: center; flex: 0 0 30px; }
+  .sect-h .ico svg { width: 17px; height: 17px; }
+  .sect-h h3 { font-size: 15.5px; margin: 0; font-weight: 700; letter-spacing: -.2px; }
+  .sect-h p { margin: 1px 0 0; font-size: 12px; color: var(--muted); font-weight: 500; }
+  .listrow { display: flex; align-items: center; gap: 12px; padding: 13px 0; border-top: 1px solid var(--hair); }
+  .listrow:first-of-type { border-top: 0; }
+  .listrow .li-ico { width: 36px; height: 36px; border-radius: 11px; flex: 0 0 36px; display: grid; place-items: center; }
+  .li-ico.g { background: var(--g-50); color: var(--g-600); }
+  .li-ico.a { background: var(--amber-50); color: var(--amber-600); }
+  .listrow .li-body { flex: 1; min-width: 0; }
+  .listrow .li-t { font-size: 14px; font-weight: 700; letter-spacing: -.1px; }
+  .listrow .li-s { font-size: 12px; color: var(--muted); margin-top: 1px; font-weight: 500; }
+  .li-ico svg { width: 19px; height: 19px; }
+
+  /* next-step highlight */
+  .nextstep {
+    padding: 16px; margin-bottom: 14px; border: 1px solid var(--amber-100);
+    background: linear-gradient(150deg, #FFFDF7, #FCF4E3); display: flex; gap: 13px; align-items: center;
+  }
+  .nextstep .ns-ico { width: 46px; height: 46px; border-radius: 14px; flex: 0 0 46px; display: grid; place-items: center;
+    background: linear-gradient(150deg, #F4B53C, #D8881A); color: #fff; box-shadow: 0 8px 16px -8px rgba(184,120,15,.7); }
+  .nextstep .ns-ico svg { width: 22px; height: 22px; }
+  .nextstep .ns-t { font-size: 12px; color: var(--amber-700); font-weight: 700; letter-spacing: .2px; }
+  .nextstep .ns-m { font-size: 14.5px; font-weight: 700; margin-top: 2px; letter-spacing: -.2px; }
+  .nextstep .ns-pts { font-size: 12px; color: var(--ink-2); margin-top: 2px; font-weight: 600; }
+  .nextstep .btn { flex: 0 0 auto; }
+
+  /* timeline */
+  .tl { position: relative; padding-left: 20px; }
+  .tl-item { position: relative; padding: 0 0 16px; }
+  .tl-item:last-child { padding-bottom: 4px; }
+  .tl-item::before { content:''; position: absolute; left: -15px; top: 4px; width: 9px; height: 9px; border-radius: 50%;
+    background: var(--g-500); box-shadow: 0 0 0 3px var(--g-50); }
+  .tl-item::after { content:''; position: absolute; left: -11px; top: 13px; bottom: -2px; width: 1.5px; background: var(--hair); }
+  .tl-item:last-child::after { display: none; }
+  .tl-t { font-size: 13px; font-weight: 600; color: var(--ink); line-height: 1.4; }
+  .tl-d { font-size: 11.5px; color: var(--faint); margin-top: 2px; font-weight: 500; }
+
+  /* ===== PASSPORT ===== */
+  .passport {
+    border-radius: var(--r-xl); overflow: hidden; margin-bottom: 16px; position: relative;
+    background: #fff; box-shadow: var(--sh-2); border: 1px solid var(--hair);
+  }
+  .pp-top {
+    background:
+      radial-gradient(130% 120% at 85% -20%, #1a8a63 0%, #0B6E4C 45%, #094E38 100%);
+    color: #fff; padding: 18px 20px 22px; position: relative;
+  }
+  .pp-top::after {
+    content:''; position: absolute; inset: 0; opacity: .12;
+    background-image: radial-gradient(circle at 1px 1px, #fff 1px, transparent 0);
+    background-size: 13px 13px;
+  }
+  .pp-brand { display: flex; align-items: center; justify-content: space-between; position: relative; z-index: 2; }
+  .pp-brand .wm { font-size: 12px; font-weight: 800; letter-spacing: 2px; opacity: .9; }
+  .pp-verify { display: inline-flex; align-items: center; gap: 5px; font-size: 11.5px; font-weight: 700;
+    background: rgba(255,255,255,.16); padding: 5px 10px; border-radius: 99px; }
+  .pp-verify svg { width: 14px; height: 14px; }
+  .pp-id { position: relative; z-index: 2; display: flex; align-items: center; gap: 13px; margin-top: 18px; }
+  .pp-id .av { width: 50px; height: 50px; border-radius: 15px; background: rgba(255,255,255,.16);
+    display: grid; place-items: center; font-weight: 800; font-size: 18px; flex: 0 0 50px; }
+  .pp-id h2 { margin: 0; font-size: 19px; letter-spacing: -.3px; }
+  .pp-id p { margin: 2px 0 0; font-size: 12.5px; opacity: .82; font-weight: 500; }
+  .pp-score { position: relative; z-index: 2; display: flex; align-items: center; gap: 16px; margin-top: 20px;
+    padding-top: 18px; border-top: 1px solid rgba(255,255,255,.16); }
+  .pp-ring { width: 92px; height: 92px; transform: rotate(-90deg); flex: 0 0 92px; }
+  .pp-ring .track { fill: none; stroke: rgba(255,255,255,.22); stroke-width: 9; }
+  .pp-ring .prog { fill: none; stroke: #fff; stroke-width: 9; stroke-linecap: round; }
+  .pp-sc-num { font-size: 27px; font-weight: 800; color: #fff; letter-spacing: -1px; }
+  .pp-sc-of { font-size: 9.5px; color: rgba(255,255,255,.7); font-weight: 700; letter-spacing: .4px; }
+  .pp-sc-meta .ttl { font-size: 12px; opacity: .82; font-weight: 600; }
+  .pp-sc-meta .big { font-size: 18px; font-weight: 800; margin: 2px 0 8px; letter-spacing: -.3px; }
+  .pp-tags { display: flex; gap: 7px; flex-wrap: wrap; }
+  .pp-tag { font-size: 11.5px; font-weight: 700; background: rgba(255,255,255,.16); padding: 4px 10px; border-radius: 99px;
+    display: inline-flex; align-items: center; gap: 5px; }
+  .pp-body { padding: 6px 18px 4px; }
+  .pp-foot { display: flex; align-items: center; gap: 13px; padding: 16px 18px; border-top: 1px solid var(--hair);
+    background: var(--g-50); }
+  .qr { width: 50px; height: 50px; border-radius: 11px; flex: 0 0 50px; background: #fff; border: 1px solid var(--hair);
+    background-image:
+      linear-gradient(var(--ink) 0 0), linear-gradient(var(--ink) 0 0);
+    position: relative; overflow: hidden; }
+  .qr svg { width: 100%; height: 100%; }
+  .pp-foot .ft { flex: 1; }
+  .pp-foot .ft .a { font-size: 13px; font-weight: 700; }
+  .pp-foot .ft .b { font-size: 11.5px; color: var(--muted); margin-top: 1px; }
+
+  .statusrow { display: flex; align-items: center; gap: 12px; padding: 13px 0; border-top: 1px solid var(--hair); }
+  .statusrow:first-child { border-top: 0; }
+  .statusrow .si { width: 34px; height: 34px; border-radius: 10px; flex: 0 0 34px; display: grid; place-items: center;
+    background: var(--g-50); color: var(--g-600); }
+  .statusrow .si svg { width: 18px; height: 18px; }
+  .statusrow .sb { flex: 1; }
+  .statusrow .sb .a { font-size: 13.5px; font-weight: 700; }
+  .statusrow .sb .b { font-size: 11.5px; color: var(--muted); margin-top: 1px; font-weight: 500; }
+  .check { width: 22px; height: 22px; border-radius: 50%; background: var(--g-500); display: grid; place-items: center; flex: 0 0 22px; }
+  .check svg { width: 13px; height: 13px; color: #fff; }
+
+  /* ===== GROW ===== */
+  .bandbar { padding: 16px; margin-bottom: 14px; }
+  .bandbar .between { margin-bottom: 11px; }
+  .band-now { font-size: 14px; font-weight: 800; white-space: nowrap; }
+  .band-next { font-size: 12.5px; color: var(--muted); font-weight: 600; white-space: nowrap; }
+  .seg { height: 12px; border-radius: 99px; background: var(--hair); overflow: hidden; position: relative; }
+  .seg > i { display: block; height: 100%; background: linear-gradient(90deg, var(--g-500), var(--g-600)); border-radius: 99px; }
+  .band-note { font-size: 12.5px; color: var(--ink-2); margin-top: 10px; font-weight: 500; }
+  .band-note b { color: var(--g-700); }
+
+  .quest { display: flex; align-items: center; gap: 13px; padding: 13px 0; border-top: 1px solid var(--hair); }
+  .quest:first-of-type { border-top: 0; }
+  .q-state { width: 28px; height: 28px; border-radius: 50%; flex: 0 0 28px; display: grid; place-items: center; font-size: 12px; font-weight: 800; }
+  .q-state.done { background: var(--g-500); color: #fff; }
+  .q-state.todo { background: #fff; border: 1.5px dashed var(--line); color: var(--faint); }
+  .q-state.active { background: var(--amber-50); border: 1.5px solid var(--amber-600); color: var(--amber-700); }
+  .quest .q-body { flex: 1; }
+  .quest .q-t { font-size: 13.5px; font-weight: 700; letter-spacing: -.1px; }
+  .quest.is-done .q-t { color: var(--muted); text-decoration: line-through; text-decoration-color: var(--line); }
+  .quest .q-s { font-size: 11.5px; color: var(--muted); margin-top: 1px; font-weight: 500; }
+  .pts { font-size: 12px; font-weight: 800; color: var(--g-600); flex: 0 0 auto; }
+  .pts.muted { color: var(--faint); }
+
+  .weight { padding: 11px 0; border-top: 1px solid var(--hair); }
+  .weight:first-of-type { border-top: 0; }
+  .weight .between { margin-bottom: 7px; }
+  .weight .wl { font-size: 13px; font-weight: 700; }
+  .weight .wp { font-size: 12px; font-weight: 700; color: var(--muted); }
+  .wbar { height: 7px; border-radius: 99px; background: var(--hair); overflow: hidden; }
+  .wbar > i { display: block; height: 100%; border-radius: 99px; }
+
+  .months { display: grid; grid-template-columns: repeat(3, 1fr); gap: 9px; margin-top: 4px; }
+  .month { text-align: center; padding: 13px 6px; border-radius: 14px; background: var(--bg); border: 1px solid var(--hair); }
+  .month.mid { background: var(--g-50); border-color: var(--g-100); }
+  .month .mn { font-size: 21px; font-weight: 800; letter-spacing: -.5px; }
+  .month .ml { font-size: 10.5px; color: var(--muted); margin-top: 3px; font-weight: 600; }
+  .month .me { font-size: 14px; }
+
+  .voicecard {
+    padding: 18px; margin-bottom: 14px; color: #fff; border: 0; position: relative; overflow: hidden;
+    background: radial-gradient(120% 120% at 100% 0%, #18181f 0%, #21303a 60%, #0E5A45 130%);
+  }
+  .voicecard .vc-top { display: flex; align-items: center; gap: 13px; }
+  .voicecard .vmic { width: 50px; height: 50px; border-radius: 50%; flex: 0 0 50px; display: grid; place-items: center;
+    background: var(--g-500); box-shadow: 0 0 0 8px rgba(22,160,109,.18); }
+  .voicecard .vmic svg { width: 24px; height: 24px; color: #fff; }
+  .voicecard h3 { margin: 0; font-size: 16px; letter-spacing: -.2px; }
+  .voicecard .vsub { font-size: 12px; opacity: .8; margin-top: 2px; font-weight: 500; }
+  .voicecard .vnp { font-size: 13px; margin: 14px 0 0; opacity: .92; line-height: 1.5; }
+  .voicecard .btn { width: 100%; margin-top: 14px; background: #fff; color: var(--ink); box-shadow: none; }
+
+  /* ===== VOICE SHEET ===== */
+  .sheet {
+    position: absolute; inset: 0; z-index: 60; transform: translateY(100%);
+    transition: transform .4s cubic-bezier(.3,.8,.25,1); display: flex; flex-direction: column;
+    background: radial-gradient(120% 80% at 50% 0%, #20303a 0%, #131a1f 70%, #0c1114 100%); color: #fff;
+  }
+  .sheet.open { transform: none; }
+  .sheet-top { padding: 60px 22px 10px; display: flex; align-items: center; justify-content: space-between; }
+  .sheet-top .st-x { width: 38px; height: 38px; border-radius: 11px; background: rgba(255,255,255,.1); border: 0; color: #fff;
+    display: grid; place-items: center; cursor: pointer; }
+  .sheet-top .st-x svg { width: 18px; height: 18px; }
+  .vprog { display: flex; gap: 6px; align-items: center; }
+  .vprog i { width: 22px; height: 5px; border-radius: 99px; background: rgba(255,255,255,.2); }
+  .vprog i.on { background: var(--g-400); }
+  .sheet-body { flex: 1; display: flex; flex-direction: column; padding: 14px 24px 26px; }
+  .vq-tag { font-size: 12px; font-weight: 700; color: var(--g-400); letter-spacing: .3px; }
+  .vq-np { font-size: 21px; font-weight: 700; line-height: 1.5; margin: 14px 0 8px; letter-spacing: -.2px; }
+  .vq-en { font-size: 14px; opacity: .62; line-height: 1.5; font-weight: 500; }
+  .vchips { display: flex; flex-direction: column; gap: 10px; margin-top: 20px; }
+  .vchip { text-align: left; padding: 15px 16px; border-radius: 15px; background: rgba(255,255,255,.07);
+    border: 1.5px solid rgba(255,255,255,.1); color: #fff; font-family: var(--ff); font-size: 14.5px; font-weight: 600;
+    cursor: pointer; transition: all .15s ease; line-height: 1.4; }
+  .vchip .vchip-np { display: block; font-size: 12.5px; opacity: .6; font-weight: 500; margin-top: 3px; }
+  .vchip:hover, .vchip.sel { background: rgba(60,185,138,.16); border-color: var(--g-400); }
+  .mic-zone { margin-top: auto; display: flex; flex-direction: column; align-items: center; gap: 14px; }
+  .wave { display: flex; align-items: center; gap: 4px; height: 34px; }
+  .wave i { width: 4px; border-radius: 99px; background: var(--g-400); animation: wv 1.1s ease-in-out infinite; }
+  @keyframes wv { 0%,100% { height: 8px; opacity:.4 } 50% { height: 30px; opacity: 1 } }
+  .micbtn { width: 88px; height: 88px; border-radius: 50%; border: 0; cursor: pointer; color: #fff;
+    background: linear-gradient(150deg, var(--g-500), var(--g-700)); display: grid; place-items: center;
+    box-shadow: 0 0 0 0 rgba(22,160,109,.5); animation: pulse 2.2s ease-out infinite; }
+  .micbtn svg { width: 36px; height: 36px; }
+  @keyframes pulse { 0% { box-shadow: 0 0 0 0 rgba(22,160,109,.45) } 100% { box-shadow: 0 0 0 26px rgba(22,160,109,0) } }
+  .mic-hint { font-size: 13px; opacity: .7; font-weight: 600; }
+  .mic-hint .np { display: block; font-size: 14px; opacity: 1; margin-bottom: 2px; }
+  .type-fallback { text-align: center; margin-top: 16px; font-size: 13px; color: rgba(255,255,255,.55); font-weight: 600;
+    background: none; border: 0; cursor: pointer; font-family: var(--ff); width: 100%; }
+  .type-fallback u { text-underline-offset: 3px; }
+
+  /* atlas link below phone */
+  .atlas-cta {
+    display: inline-flex; align-items: center; gap: 9px; text-decoration: none;
+    background: #fff; color: var(--ink); padding: 11px 18px; border-radius: 14px; font-size: 13.5px; font-weight: 700;
+    box-shadow: var(--sh-2); border: 1px solid var(--hair); transition: transform .15s ease;
+  }
+  .atlas-cta:hover { transform: translateY(-1px); }
+  .atlas-cta .ac-ic { width: 26px; height: 26px; border-radius: 8px; background: var(--ink); color: #fff;
+    display: grid; place-items: center; }
+  .atlas-cta .ac-ic svg { width: 15px; height: 15px; }
+  .atlas-cta span small { display: block; font-size: 11px; color: var(--muted); font-weight: 500; }
+  .atlas-cta .arrow { color: var(--faint); }
+</style>
+</head>
+<body>
+<div class="stage">
+  <div class="phone-shell" id="shell">
+    <div class="phone" data-screen-label="Merchant App">
+      <div class="notch"></div>
+      <div class="screenwrap">
+        <!-- status bar -->
+        <div class="statusbar">
+          <span>9:41</span>
+          <span class="sb-r">
+            <svg width="17" height="12" viewBox="0 0 17 12" fill="none"><path d="M1 8h2v3H1zM5 5h2v6H5zM9 3h2v8H9zM13 1h2v10h-2z" fill="currentColor"/></svg>
+            <svg width="16" height="12" viewBox="0 0 16 12" fill="none"><path d="M8 2.5c2 0 3.8.8 5 2.1l1.2-1.3C13.6 1.6 10.9.5 8 .5S2.4 1.6.8 3.3L2 4.6C3.2 3.3 6 2.5 8 2.5z" fill="currentColor"/><path d="M8 6c1.1 0 2.1.4 2.8 1.2L8 10 5.2 7.2C5.9 6.4 6.9 6 8 6z" fill="currentColor"/></svg>
+            <svg width="25" height="12" viewBox="0 0 25 12" fill="none"><rect x="1" y="1" width="20" height="10" rx="3" stroke="currentColor" stroke-width="1.2"/><rect x="2.5" y="2.5" width="15" height="7" rx="1.5" fill="currentColor"/><rect x="22" y="4" width="2" height="4" rx="1" fill="currentColor"/></svg>
+          </span>
+        </div>
+
+        <div class="viewport">
+
+          <!-- ============ HOME ============ -->
+          <section class="screen active" id="home">
+            <div class="greet">
+              <div class="avatar">AS</div>
+              <div style="flex:1">
+                <h1>Namaste, Asha <span class="np" style="font-weight:600;color:var(--muted);font-size:13px">नमस्ते</span></h1>
+                <p>Asha Store · Bhaktapur</p>
+              </div>
+              <button class="iconbtn" aria-label="Notifications">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9M13.7 21a2 2 0 0 1-3.4 0" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              </button>
+            </div>
+
+            <!-- hero score -->
+            <div class="card hero">
+              <div class="hero-top">
+                <div class="ring-wrap">
+                  <svg class="ring" viewBox="0 0 120 120" data-ring data-score="712" data-max="1000">
+                    <circle class="track" cx="60" cy="60" r="52"></circle>
+                    <circle class="prog" cx="60" cy="60" r="52"></circle>
+                  </svg>
+                  <div class="ring-center">
+                    <div><div class="ring-score tnum" data-count="712">712</div><div class="ring-of">OF 1000</div></div>
+                  </div>
+                </div>
+                <div class="hero-meta">
+                  <div class="hero-pills">
+                    <span class="pill pill-green"><span class="dot"></span>Growing</span>
+                    <span class="pill pill-ghost">Low risk</span>
+                  </div>
+                  <div class="hero-label">Trust score</div>
+                  <div class="hero-num tnum">712</div>
+                  <span class="delta">
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M5 12l7-7 7 7M12 5v14" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                    +24 this week
+                  </span>
+                </div>
+              </div>
+              <div class="conf">
+                <div class="between"><span>How sure we are</span><span>74%</span></div>
+                <div class="meter"><i style="width:74%"></i></div>
+              </div>
+              <p class="hero-note">A higher score means banks and suppliers trust you more — so you can borrow more, at better terms. It grows each time you pay on time.</p>
+            </div>
+
+            <!-- borrow -->
+            <div class="card borrow">
+              <div class="blab">You can borrow today</div>
+              <div class="bnum tnum">NPR 120,000</div>
+              <div class="bsub">Pay back weekly · 2-week grace period</div>
+              <button class="btn">See your offer
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M5 12h14M13 6l6 6-6 6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              </button>
+            </div>
+
+            <!-- next step -->
+            <div class="card nextstep">
+              <div class="ns-ico">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><path d="M12 2a3 3 0 0 0-3 3v6a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3zM19 10a7 7 0 0 1-14 0M12 19v3" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              </div>
+              <div style="flex:1">
+                <div class="ns-t">YOUR NEXT STEP</div>
+                <div class="ns-m">Finish the 2-min voice check</div>
+                <div class="ns-pts">+30 points · in Nepali</div>
+              </div>
+              <button class="btn btn-primary btn-sm" data-voice>Start</button>
+            </div>
+
+            <!-- what's lifting -->
+            <div class="card sect">
+              <div class="sect-h">
+                <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M20.84 4.6a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 1 0-7.78 7.78L12 21.23l8.84-8.84a5.5 5.5 0 0 0 0-7.78z" stroke-linejoin="round"/></svg></div>
+                <div><h3>What's lifting your score</h3></div>
+              </div>
+              <div class="listrow">
+                <div class="li-ico g"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM23 21v-2a4 4 0 0 0-3-3.87M16 3.13A4 4 0 0 1 16 11" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+                <div class="li-body"><div class="li-t">Supplier vouch verified</div><div class="li-s">From a trusted anchor business</div></div>
+                <span class="pill pill-green">+40</span>
+              </div>
+              <div class="listrow">
+                <div class="li-ico g"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" stroke-linejoin="round"/></svg></div>
+                <div class="li-body"><div class="li-t">Electricity bill on time</div><div class="li-s">5 of 6 months paid on time</div></div>
+                <span class="pill pill-green">+20</span>
+              </div>
+              <div class="listrow">
+                <div class="li-ico g"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg></div>
+                <div class="li-body"><div class="li-t">Steady QR sales</div><div class="li-s">Consistent every month</div></div>
+                <span class="pill pill-green">+25</span>
+              </div>
+            </div>
+
+            <!-- recent -->
+            <div class="card sect">
+              <div class="sect-h"><div><h3 style="margin-bottom:14px">Recent activity</h3></div></div>
+              <div class="tl">
+                <div class="tl-item"><div class="tl-t">Anchor vouch received from a verified supplier.</div><div class="tl-d">2 days ago</div></div>
+                <div class="tl-item"><div class="tl-t">Score outlook improved after your utility payment.</div><div class="tl-d">5 days ago</div></div>
+                <div class="tl-item"><div class="tl-t">Voice check ready in Nepali with typed fallback.</div><div class="tl-d">1 week ago</div></div>
+              </div>
+            </div>
+          </section>
+
+          <!-- ============ PASSPORT ============ -->
+          <section class="screen" id="passport">
+            <div class="between" style="padding:6px 2px 4px">
+              <div>
+                <div class="scr-title" style="margin:6px 0 0">Credit Passport</div>
+                <div class="scr-sub" style="margin:2px 0 0">Your portable proof of trust</div>
+              </div>
+              <button class="iconbtn" aria-label="Share">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8M16 6l-4-4-4 4M12 2v13" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              </button>
+            </div>
+
+            <div class="passport">
+              <div class="pp-top">
+                <div class="pp-brand">
+                  <span class="wm">TRUST&nbsp;LAYER</span>
+                  <span class="pp-verify"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M9 12l2 2 4-4M12 2l2.4 1.8 3 .2.2 3L19.4 12 17.6 14.8l-.2 3-3 .2L12 22l-2.4-1.8-3-.2-.2-3L4.6 12l1.8-2.8.2-3 3-.2L12 2z" stroke-linejoin="round"/></svg>Identity verified</span>
+                </div>
+                <div class="pp-id">
+                  <div class="av">AS</div>
+                  <div><h2>Asha Store</h2><p>Kirana shop · Bhaktapur · since 2019</p></div>
+                </div>
+                <div class="pp-score">
+                  <div class="ring-wrap">
+                    <svg class="pp-ring" viewBox="0 0 110 110" data-ring data-score="712" data-max="1000" data-white="1">
+                      <circle class="track" cx="55" cy="55" r="48"></circle>
+                      <circle class="prog" cx="55" cy="55" r="48"></circle>
+                    </svg>
+                    <div class="ring-center"><div><div class="pp-sc-num tnum">712</div><div class="pp-sc-of">OF 1000</div></div></div>
+                  </div>
+                  <div class="pp-sc-meta">
+                    <div class="ttl">Trust score</div>
+                    <div class="big">Growing well</div>
+                    <div class="pp-tags">
+                      <span class="pp-tag"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M20 6L9 17l-5-5" stroke-linecap="round" stroke-linejoin="round"/></svg>Low risk</span>
+                      <span class="pp-tag">74% confidence</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div class="pp-body">
+                <div class="statusrow">
+                  <div class="si"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM23 21v-2a4 4 0 0 0-3-3.87M16 3.13A4 4 0 0 1 16 11" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+                  <div class="sb"><div class="a">Community vouches</div><div class="b">2 trusted businesses vouched for you</div></div>
+                  <div class="check"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M20 6L9 17l-5-5" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+                </div>
+                <div class="statusrow">
+                  <div class="si"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z M14 2v6h6M9 14l2 2 4-4" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+                  <div class="sb"><div class="a">On-time bill payments</div><div class="b">5 of 6 utility bills paid on time</div></div>
+                  <div class="check"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M20 6L9 17l-5-5" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+                </div>
+                <div class="statusrow">
+                  <div class="si"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 9l1-5h16l1 5M4 9v11a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1V9M9 21v-6h6v6" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+                  <div class="sb"><div class="a">Monthly sales (QR)</div><div class="b">Steady digital sales every month</div></div>
+                  <div class="check"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M20 6L9 17l-5-5" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+                </div>
+                <div class="statusrow">
+                  <div class="si"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 2a3 3 0 0 0-3 3v6a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3zM19 10a7 7 0 0 1-14 0M12 19v3" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+                  <div class="sb"><div class="a">Business interview</div><div class="b">Voice check completed in Nepali</div></div>
+                  <div class="check"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M20 6L9 17l-5-5" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+                </div>
+              </div>
+
+              <div class="pp-foot">
+                <div class="qr"><svg viewBox="0 0 40 40"><rect width="40" height="40" fill="#fff"/><g fill="#15211C"><rect x="4" y="4" width="11" height="11" rx="1"/><rect x="7" y="7" width="5" height="5" fill="#fff"/><rect x="25" y="4" width="11" height="11" rx="1"/><rect x="28" y="7" width="5" height="5" fill="#fff"/><rect x="4" y="25" width="11" height="11" rx="1"/><rect x="7" y="28" width="5" height="5" fill="#fff"/><rect x="19" y="4" width="2" height="2"/><rect x="19" y="9" width="2" height="2"/><rect x="19" y="19" width="2" height="2"/><rect x="24" y="19" width="2" height="2"/><rect x="29" y="19" width="2" height="2"/><rect x="34" y="24" width="2" height="2"/><rect x="19" y="24" width="2" height="2"/><rect x="24" y="29" width="2" height="2"/><rect x="29" y="29" width="2" height="2"/><rect x="34" y="34" width="2" height="2"/><rect x="19" y="34" width="2" height="2"/><rect x="24" y="34" width="2" height="2"/></g></svg></div>
+                <div class="ft"><div class="a">Verified by Trust Layer</div><div class="b">Scan to confirm · valid May 2026</div></div>
+              </div>
+            </div>
+
+            <button class="btn btn-primary" style="width:100%;margin-bottom:10px">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8M16 6l-4-4-4 4M12 2v13" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              Share with a lender
+            </button>
+            <p style="text-align:center;font-size:12px;color:var(--muted);font-weight:500;margin:2px 0 0;line-height:1.5">No paperwork needed. Your passport updates itself as you keep trading.</p>
+          </section>
+
+          <!-- ============ GROW ============ -->
+          <section class="screen" id="grow">
+            <div class="scr-title">Grow your score</div>
+            <div class="scr-sub">Small steps. Better rates. More to borrow.</div>
+
+            <!-- band progress -->
+            <div class="card bandbar">
+              <div class="between">
+                <span class="band-now">712 · Growing</span>
+                <span class="band-next">Next: 750 Strong</span>
+              </div>
+              <div class="seg"><i style="width:76%"></i></div>
+              <div class="band-note"><b>38 points</b> to the Strong band — it unlocks lower interest and a bigger limit.</div>
+            </div>
+
+            <!-- checklist -->
+            <div class="card sect" style="padding-bottom:14px">
+              <div class="sect-h">
+                <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M9 11l3 3L22 4M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+                <div><h3>Ways to add points</h3><p>2 of 5 done</p></div>
+              </div>
+              <div class="quest is-done">
+                <div class="q-state done"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M20 6L9 17l-5-5" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+                <div class="q-body"><div class="q-t">Added electricity bill</div><div class="q-s">Linked your utility account</div></div>
+                <span class="pts muted">+20</span>
+              </div>
+              <div class="quest is-done">
+                <div class="q-state done"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M20 6L9 17l-5-5" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+                <div class="q-body"><div class="q-t">Got a supplier vouch</div><div class="q-s">A verified anchor backed you</div></div>
+                <span class="pts muted">+40</span>
+              </div>
+              <div class="quest">
+                <div class="q-state active">3</div>
+                <div class="q-body"><div class="q-t">Finish the voice check</div><div class="q-s">2 minutes, in Nepali</div></div>
+                <button class="btn btn-ghost btn-sm" data-voice>Start</button>
+              </div>
+              <div class="quest">
+                <div class="q-state todo">4</div>
+                <div class="q-body"><div class="q-t">Set up water bill autopay</div><div class="q-s">One more bill on record</div></div>
+                <span class="pts">+15</span>
+              </div>
+              <div class="quest">
+                <div class="q-state todo">5</div>
+                <div class="q-body"><div class="q-t">Invite 1 more business to vouch</div><div class="q-s">Stronger community trust</div></div>
+                <span class="pts">+35</span>
+              </div>
+            </div>
+
+            <!-- voice feature -->
+            <div class="card voicecard">
+              <div class="vc-top">
+                <div class="vmic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><path d="M12 2a3 3 0 0 0-3 3v6a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3zM19 10a7 7 0 0 1-14 0M12 19v3" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+                <div><h3>Voice check</h3><div class="vsub">Answer 5 short questions out loud</div></div>
+              </div>
+              <p class="vnp np">तपाईंको व्यवसायको बारेमा केही सोध्छौं — सजिलो छ।</p>
+              <button class="btn" data-voice>Start voice check · +30</button>
+            </div>
+
+            <!-- weighting -->
+            <div class="card sect" style="padding-bottom:16px">
+              <div class="sect-h">
+                <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M18 20V10M12 20V4M6 20v-6" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+                <div><h3>What makes up your score</h3></div>
+              </div>
+              <div class="weight"><div class="between"><span class="wl">Community trust</span><span class="wp">30%</span></div><div class="wbar"><i style="width:30%;background:var(--g-600)"></i></div></div>
+              <div class="weight"><div class="between"><span class="wl">Bill payments</span><span class="wp">25%</span></div><div class="wbar"><i style="width:25%;background:var(--g-500)"></i></div></div>
+              <div class="weight"><div class="between"><span class="wl">Sales activity</span><span class="wp">25%</span></div><div class="wbar"><i style="width:25%;background:var(--g-400)"></i></div></div>
+              <div class="weight"><div class="between"><span class="wl">Behavior &amp; voice</span><span class="wp">20%</span></div><div class="wbar"><i style="width:20%;background:#7CCBA8"></i></div></div>
+            </div>
+
+            <!-- resilience -->
+            <div class="card sect" style="padding-bottom:16px">
+              <div class="sect-h">
+                <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 12h4l3 8 4-16 3 8h4" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+                <div><h3>Good &amp; slow months</h3><p>Lenders check your slow months too</p></div>
+              </div>
+              <div class="months">
+                <div class="month"><div class="me">🌧️</div><div class="mn tnum">628</div><div class="ml">Slow month</div></div>
+                <div class="month mid"><div class="me">📈</div><div class="mn tnum">712</div><div class="ml">Typical</div></div>
+                <div class="month"><div class="me">☀️</div><div class="mn tnum">806</div><div class="ml">Good month</div></div>
+              </div>
+            </div>
+          </section>
+
+        </div><!-- /viewport -->
+
+        <!-- ===== VOICE SHEET ===== -->
+        <div class="sheet" id="voiceSheet">
+          <div class="sheet-top">
+            <button class="st-x" id="voiceClose" aria-label="Close"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6L6 18M6 6l12 12" stroke-linecap="round"/></svg></button>
+            <div class="vprog"><i class="on"></i><i class="on"></i><i></i><i></i><i></i></div>
+            <div style="width:38px"></div>
+          </div>
+          <div class="sheet-body">
+            <div class="vq-tag">QUESTION 2 OF 5</div>
+            <div class="vq-np np">तपाईंको पसलमा व्यस्त हप्ता आउँदैछ। आपूर्तिकर्ताले उधारोमा थप सामान दिन्छन्। तपाईं के गर्नुहुन्छ?</div>
+            <div class="vq-en">Your busiest week is coming. A supplier offers extra stock on credit. What do you do?</div>
+
+            <div class="vchips">
+              <button class="vchip">Take only what I'm sure I can sell<span class="vchip-np np">बेच्न सक्ने जति मात्र लिन्छु</span></button>
+              <button class="vchip">Take the full offer to not miss out<span class="vchip-np np">मौका नछुटोस् भनेर सबै लिन्छु</span></button>
+              <button class="vchip">Check last year's sales first, then decide<span class="vchip-np np">गत वर्षको बिक्री हेरेर निर्णय गर्छु</span></button>
+            </div>
+
+            <div class="mic-zone">
+              <div class="wave" id="wave"></div>
+              <button class="micbtn" aria-label="Record answer"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 2a3 3 0 0 0-3 3v6a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3zM19 10a7 7 0 0 1-14 0M12 19v3" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+              <div class="mic-hint"><span class="np">बोल्न थिच्नुहोस्</span>Hold to answer out loud</div>
+              <button class="type-fallback">Can't talk now? <u>Type your answer instead</u></button>
+            </div>
+          </div>
+        </div>
+
+        <!-- ===== TAB BAR ===== -->
+        <nav class="tabbar">
+          <button class="tab on" data-tab="home">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><path d="M3 10.5L12 3l9 7.5M5 9v11a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V9" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            Home
+          </button>
+          <button class="tab" data-tab="passport">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><rect x="5" y="2" width="14" height="20" rx="2.5"/><circle cx="12" cy="9" r="2.5"/><path d="M8.5 16c.6-1.8 2-2.5 3.5-2.5s2.9.7 3.5 2.5" stroke-linecap="round"/></svg>
+            Passport
+          </button>
+          <button class="tab" data-tab="grow">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><path d="M3 17l6-6 4 4 8-8M21 7v5M21 7h-5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            Grow
+          </button>
+        </nav>
+
+      </div><!-- /screenwrap -->
+    </div><!-- /phone -->
+  </div><!-- /shell -->
+
+  <a class="atlas-cta" href="Trust Atlas.html">
+    <span class="ac-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><circle cx="6" cy="6" r="2.4"/><circle cx="18" cy="7" r="2.4"/><circle cx="12" cy="17" r="2.4"/><path d="M8 7l8 .5M7.5 8l3.5 7M16 9l-3 6.5" stroke-linecap="round"/></svg></span>
+    <span>Open the lender view<small>Trust Atlas — network &amp; fraud detection</small></span>
+    <span class="arrow"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M5 12h14M13 6l6 6-6 6" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+  </a>
+</div>
+
+<script>
+  /* ----- ring rendering ----- */
+  function band(score){
+    if (score < 400) return getComputedStyle(document.documentElement).getPropertyValue('--amber-600').trim();
+    if (score < 700) return getComputedStyle(document.documentElement).getPropertyValue('--g-500').trim();
+    return getComputedStyle(document.documentElement).getPropertyValue('--g-700').trim();
+  }
+  document.querySelectorAll('[data-ring]').forEach(svg => {
+    const prog = svg.querySelector('.prog');
+    const r = prog.r.baseVal.value;
+    const c = 2 * Math.PI * r;
+    const score = +svg.dataset.score, max = +svg.dataset.max;
+    const pct = Math.min(1, score / max);
+    prog.style.strokeDasharray = c;
+    prog.style.strokeDashoffset = c;
+    if (!svg.dataset.white) prog.style.stroke = band(score);
+    requestAnimationFrame(() => requestAnimationFrame(() => {
+      prog.style.strokeDashoffset = c * (1 - pct);
+    }));
+  });
+
+  /* ----- tab nav ----- */
+  const tabs = document.querySelectorAll('.tab');
+  const screens = document.querySelectorAll('.screen');
+  const vp = document.querySelector('.viewport');
+  tabs.forEach(t => t.addEventListener('click', () => {
+    const id = t.dataset.tab;
+    tabs.forEach(x => x.classList.toggle('on', x === t));
+    screens.forEach(s => s.classList.toggle('active', s.id === id));
+    const active = document.getElementById(id);
+    if (active) active.scrollTop = 0;
+  }));
+
+  /* ----- voice sheet ----- */
+  const sheet = document.getElementById('voiceSheet');
+  const wave = document.getElementById('wave');
+  for (let i = 0; i < 22; i++){ const b = document.createElement('i'); b.style.animationDelay = (i*0.06)+'s'; wave.appendChild(b); }
+  document.querySelectorAll('[data-voice]').forEach(b => b.addEventListener('click', () => sheet.classList.add('open')));
+  document.getElementById('voiceClose').addEventListener('click', () => sheet.classList.remove('open'));
+  document.querySelectorAll('.vchip').forEach(c => c.addEventListener('click', () => {
+    document.querySelectorAll('.vchip').forEach(x => x.classList.remove('sel'));
+    c.classList.add('sel');
+  }));
+
+  /* ----- responsive scale ----- */
+  function fit(){
+    const shell = document.getElementById('shell');
+    const margin = window.innerWidth < 480 ? 12 : 40;
+    const availH = window.innerHeight - 150;
+    const availW = window.innerWidth - margin*2;
+    const s = Math.min(1, availH/846, availW/392);
+    shell.style.transform = 'scale(' + s + ')';
+    shell.style.marginBottom = (846*(s-1)) + 'px';
+  }
+  fit(); window.addEventListener('resize', fit);
+</script>
+</body>
+</html>
